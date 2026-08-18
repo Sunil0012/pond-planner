@@ -1,64 +1,18 @@
 # Pond Planner Pro
 
-https://pond-site-finder.preview.emergentagent.com/
-
-
-create a website exactly like this, and add 
-
 # High-Level Design
-
-
-
 
 ## AI-Based Village Pond Planning System
 
-
-
-
-### Document purpose
-
-
-
-
-This document describes the planned design for an AI-assisted geospatial system that helps identify suitable locations for village ponds. The system is intended to support planners and field teams, not replace official surveys or engineering approval.
-
-
-
-
-The central design principle is simple: every recommendation should be explainable. A user should be able to see which terrain, rainfall, land, and accessibility facts contributed to a result and which assumptions still need field verification.
-
-
-
-
----
-
-
-
-
 ## 1. Problem Statement and Objectives
-
-
-
 
 ### Problem statement
 
-
-
-
 Selecting a village pond location manually is time-consuming and often depends on disconnected sources of information. A low-lying area may not be suitable if its catchment is too small, the land parcel is unavailable, the slope is unsafe, or the location is too close to houses, roads, utilities, or protected land.
-
-
-
 
 The proposed system combines spatial datasets and domain rules into one repeatable workflow. It generates a ranked list of candidate sites and explains why each candidate is recommended, conditional, or rejected.
 
-
-
-
 ### Objectives
-
-
-
 
 - Identify multiple possible pond locations for a selected village.
 
@@ -76,18 +30,9 @@ The proposed system combines spatial datasets and domain rules into one repeatab
 
 - Export a field-verification report with coordinates and evidence.
 
-
-
-
 ### Scope boundaries
 
-
-
-
 The system will provide planning support and preliminary estimates. It will not perform final structural design, legally establish ownership, replace a cadastral survey, certify soil strength, or issue construction approval.
-
-
-
 
 ---
 
