@@ -880,27 +880,13 @@ Implement constraints, explainable scoring, confidence, candidate comparison, PD
 ### Phase 5: Field validation
 
 
-
-
 Add mobile-friendly review forms, photographs, GPS observations, acceptance testing, and pilot deployment.
-
-
-
 
 ---
 
-
-
-
 ## 11. Success Criteria
 
-
-
-
 The first working version will be considered successful when a user can:
-
-
-
 
 1. Create a study for a village.
 
@@ -925,13 +911,7 @@ The first working version will be considered successful when a user can:
 
 ## Final design position
 
-
-
-
 This project is best understood as an explainable geospatial decision-support system. Its value is not only in producing a location, but in showing the evidence behind that location, identifying uncertainty, and directing the remaining questions to the field team.
-
-
-
 
 > **A good recommendation is useful, explainable, reproducible, and honest about what still needs to be verified.**
 
@@ -957,23 +937,10 @@ Field reviewers can record observations, photographs, and approval status.
 
 Users can export results as PDF, JSON, and GeoJSON, make it soo good and simplistic, minimilistic
 
-This project was built with [Lovable](https://lovable.dev).
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/469ca5f8-65c4-42c8-8678-fdea7c6ea9e1).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
+git clone https://github.com/Sunil0012/pond-planner-pro.git
+cd pond-planner
 npm i
 npm run dev
 ```
