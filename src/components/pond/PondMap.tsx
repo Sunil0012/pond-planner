@@ -173,14 +173,55 @@ export function PondMap({
       );
     }
 
-    if (layers.drainage && g.drainage) {
-      drainageLines(study.village).forEach((d) =>
+    if (layers.drainage && g.drainage && waterways) {
+      const chevronSpacingPx = 46;
+      waterways.forEach((d) => {
+        const style = WATERWAY_STYLE[d.kind] ?? { color: "#2f86c9", weight: 2, label: d.kind };
+        const label = `${d.name ? `${d.name} — ` : ""}${style.label}${d.intermittent ? " (seasonal)" : ""} · flow follows the arrows`;
         leaflet
-          .polyline(d.path.map(toLL), { color: "#2563a8", weight: d.order, opacity: 0.85 })
-          .bindTooltip(`Drainage line — Strahler order ${d.order}`)
-          .addTo(g.drainage!),
-      );
+          .polyline(d.path.map(toLL), {
+            color: style.color,
+            weight: style.weight,
+            opacity: 0.9,
+            dashArray: d.intermittent ? "8 6" : undefined,
+            lineCap: "round",
+          })
+          .bindTooltip(label)
+          .addTo(g.drainage!);
+
+        // Directional chevrons: OSM waterways are digitised downstream, so the
+        // node order is the direction the water actually travels.
+        const pts = d.path.map((p) => m.latLngToLayerPoint([p.lat, p.lng]));
+        let carry = chevronSpacingPx / 2;
+        for (let i = 0; i < pts.length - 1; i++) {
+          const a = pts[i]!;
+          const b = pts[i + 1]!;
+          const seg = a.distanceTo(b);
+          if (seg < 1) continue;
+          const angle = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+          let t = carry;
+          while (t <= seg) {
+            const pt = leaflet.point(a.x + ((b.x - a.x) * t) / seg, a.y + ((b.y - a.y) * t) / seg);
+            const ll = m.layerPointToLatLng(pt);
+            leaflet
+              .marker(ll, {
+                interactive: false,
+                keyboard: false,
+                icon: leaflet.divIcon({
+                  className: "flow-chevron",
+                  iconSize: [14, 14],
+                  iconAnchor: [7, 7],
+                  html: `<span style="display:block;transform:rotate(${angle}deg);color:${style.color};font-size:13px;line-height:14px;text-align:center;text-shadow:0 0 2px rgba(255,255,255,.9)">&#10148;</span>`,
+                }),
+              })
+              .addTo(g.drainage!);
+            t += chevronSpacingPx;
+          }
+          carry = t - seg;
+        }
+      });
     }
+
 
     evaluations.forEach((e) => {
       const c = e.candidate;
