@@ -1,4 +1,6 @@
-import { blob, hashSeed, mulberry32, offset, polygonAreaM2 } from "./geo";
+import { blob, hashSeed, mulberry32, polygonAreaM2 } from "./geo";
+import { candidateOutlets, cellLatLng, junctionOrder, outletGeometry, villageTerrain } from "./terrainSim";
+
 import type {
   Candidate,
   Confidence,
@@ -20,48 +22,56 @@ export const LAND_LABEL: Record<LandUse, string> = {
 const SOILS = ["Clay loam", "Sandy loam", "Silty clay", "Red lateritic", "Black cotton"];
 
 export function analyseTerrain(village: Village): TerrainAnalysis {
-  const rand = mulberry32(hashSeed(village.id + ":terrain"));
-  const base = 180 + Math.round(rand() * 420);
+  const t = villageTerrain(village);
   return {
     demSource: village.demDataset,
-    resolution_m: village.demDataset.includes("12.5") ? 12.5 : 30,
-    minElevation_m: base,
-    maxElevation_m: base + 24 + Math.round(rand() * 60),
-    meanSlope_pct: Number((1.8 + rand() * 4).toFixed(2)),
-    sinksFilled: 40 + Math.round(rand() * 260),
-    contourInterval_m: 2,
-    drainageLines: 6 + Math.round(rand() * 12),
-    gapPct: Number((rand() * 1.6).toFixed(2)),
+    resolution_m: Number(t.dem.cell_m.toFixed(1)),
+    minElevation_m: Math.round(t.hyd.minElev),
+    maxElevation_m: Math.round(t.hyd.maxElev),
+    meanSlope_pct: Number(t.hyd.meanSlope.toFixed(2)),
+    sinksFilled: t.hyd.sinksFilled,
+    contourInterval_m: t.contourInterval_m,
+    drainageLines: t.drainage.length,
+    gapPct: 0,
   };
 }
 
+/**
+ * Candidates are the confluences of the terrain's own flow paths — the points
+ * where several small channels merge into a larger one. Their number depends on
+ * the size of the study area, and their catchments are delineated upstream on
+ * the D8 flow grid.
+ */
 export function generateCandidates(village: Village, terrain: TerrainAnalysis): Candidate[] {
-  const rand = mulberry32(hashSeed(village.id + ":cand"));
-  const n = 8;
+  const t = villageTerrain(village);
+  const outlets = candidateOutlets(t);
+  const rand = mulberry32(hashSeed(village.id + ":attrs"));
   const out: Candidate[] = [];
-  for (let i = 0; i < n; i++) {
-    const a = rand() * Math.PI * 2;
-    const r = 250 + rand() * 1050;
-    const loc = offset(village.center, Math.cos(a) * r, Math.sin(a) * r);
-    const catchment = blob(loc, 180 + rand() * 260, 11, rand);
-    const catchArea = Math.round(polygonAreaM2(catchment));
+
+  outlets.forEach((cellIndex, i) => {
+    const loc = cellLatLng(t, cellIndex);
+    const { cells, catchment, catchmentArea_m2 } = outletGeometry(t, cellIndex);
     const parcel = blob(loc, 55 + rand() * 45, 7, rand);
     const computed = Math.round(polygonAreaM2(parcel));
     const errPct = (rand() - 0.4) * 14;
     const official = Math.max(500, Math.round(computed / (1 + errPct / 100)));
     const landUse = LAND_USES[Math.floor(rand() * (rand() > 0.82 ? 4 : 3))]!;
+    const edgeTruncated = cells.some((c) => {
+      const cx = c % t.dem.w;
+      const cy = (c / t.dem.w) | 0;
+      return cx <= 1 || cy <= 1 || cx >= t.dem.w - 2 || cy >= t.dem.h - 2;
+    });
+
     out.push({
       id: `${village.id}_c${i + 1}`,
       code: `CS-${String(i + 1).padStart(2, "0")}`,
       location: loc,
-      elevation_m: Number(
-        (terrain.minElevation_m + rand() * (terrain.maxElevation_m - terrain.minElevation_m) * 0.5).toFixed(1),
-      ),
-      slope_pct: Number((0.6 + rand() * 11).toFixed(2)),
-      flowAccumulation: Math.round(400 + rand() * 9000),
-      catchmentArea_m2: catchArea,
+      elevation_m: Number(t.dem.elev[cellIndex]!.toFixed(1)),
+      slope_pct: Number(t.hyd.slope[cellIndex]!.toFixed(2)),
+      flowAccumulation: Math.round(t.hyd.acc[cellIndex]!),
+      catchmentArea_m2,
       catchment,
-      drainageOrder: 1 + Math.floor(rand() * 3),
+      drainageOrder: Math.max(1, Math.min(4, junctionOrder(t, cellIndex))),
       landUse,
       parcelId: `${village.district.slice(0, 3).toUpperCase()}/${120 + i * 7}/${Math.floor(rand() * 9) + 1}`,
       parcel,
@@ -72,12 +82,14 @@ export function generateCandidates(village: Village, terrain: TerrainAnalysis): 
       distanceToProtected_m: Math.round(40 + rand() * 1600),
       soil: SOILS[Math.floor(rand() * SOILS.length)]!,
       infiltrationRate: rand() > 0.66 ? "HIGH" : rand() > 0.33 ? "MODERATE" : "LOW",
-      edgeTruncated: rand() > 0.85,
-      demGapPct: Number((rand() * 3).toFixed(2)),
+      edgeTruncated,
+      demGapPct: Number((terrain.gapPct * rand()).toFixed(2)),
     });
-  }
+  });
+
   return out;
 }
+
 
 export const parcelErrorPct = (c: Candidate) =>
   Math.abs(c.computedArea_m2 - c.officialArea_m2) / c.officialArea_m2 * 100;
@@ -237,37 +249,13 @@ export function evaluateStudy(study: Study): Evaluation[] {
     );
 }
 
-/** Synthetic contour rings for the map's elevation/contour layer. */
-export function contourRings(village: Village, terrain: TerrainAnalysis) {
-  const rand = mulberry32(hashSeed(village.id + ":contour"));
-  const rings: { elevation: number; ring: { lat: number; lng: number }[] }[] = [];
-  const steps = 8;
-  for (let i = 0; i < steps; i++) {
-    const r = 220 + i * 175;
-    rings.push({
-      elevation: terrain.minElevation_m + i * terrain.contourInterval_m,
-      ring: blob(village.center, r, 20, mulberry32(hashSeed(village.id + i) + Math.floor(rand() * 10))),
-    });
-  }
-  return rings;
+/** Contour lines traced from the village elevation surface (marching squares). */
+export function contourRings(village: Village, _terrain: TerrainAnalysis) {
+  void _terrain;
+  return villageTerrain(village).contours;
 }
 
-/** Synthetic drainage network lines. */
+/** Drainage network traced downstream on the D8 flow grid. */
 export function drainageLines(village: Village) {
-  const rand = mulberry32(hashSeed(village.id + ":drain"));
-  const lines: { order: number; path: { lat: number; lng: number }[] }[] = [];
-  for (let i = 0; i < 7; i++) {
-    const a = rand() * Math.PI * 2;
-    const path = [] as { lat: number; lng: number }[];
-    let d = 1500;
-    let ang = a;
-    while (d > 60) {
-      path.push(offset(village.center, Math.cos(ang) * d, Math.sin(ang) * d));
-      ang += (rand() - 0.5) * 0.5;
-      d -= 130 + rand() * 130;
-    }
-    path.push(village.center);
-    lines.push({ order: 1 + Math.floor(rand() * 3), path });
-  }
-  return lines;
+  return villageTerrain(village).drainage;
 }
