@@ -313,7 +313,7 @@ export function villageTerrain(village: Village): VillageTerrain {
  */
 export function candidateOutlets(t: VillageTerrain) {
   const areaHa = t.areaM2 / 10000;
-  const want = Math.max(3, Math.min(14, Math.round(areaHa / 55) + 2));
+  const want = Math.max(3, Math.min(12, Math.round(areaHa / 110) + 2));
   const minSep = Math.max(4, Math.round(Math.min(t.dem.w, t.dem.h) / 11));
   const picked: number[] = [];
   const consider = t.confluences.length >= want ? t.confluences : [...t.confluences, ...highFlowCells(t, want * 4)];
