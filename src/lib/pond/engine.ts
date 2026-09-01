@@ -247,37 +247,13 @@ export function evaluateStudy(study: Study): Evaluation[] {
     );
 }
 
-/** Synthetic contour rings for the map's elevation/contour layer. */
-export function contourRings(village: Village, terrain: TerrainAnalysis) {
-  const rand = mulberry32(hashSeed(village.id + ":contour"));
-  const rings: { elevation: number; ring: { lat: number; lng: number }[] }[] = [];
-  const steps = 8;
-  for (let i = 0; i < steps; i++) {
-    const r = 220 + i * 175;
-    rings.push({
-      elevation: terrain.minElevation_m + i * terrain.contourInterval_m,
-      ring: blob(village.center, r, 20, mulberry32(hashSeed(village.id + i) + Math.floor(rand() * 10))),
-    });
-  }
-  return rings;
+/** Contour lines traced from the village elevation surface (marching squares). */
+export function contourRings(village: Village, _terrain: TerrainAnalysis) {
+  void _terrain;
+  return villageTerrain(village).contours;
 }
 
-/** Synthetic drainage network lines. */
+/** Drainage network traced downstream on the D8 flow grid. */
 export function drainageLines(village: Village) {
-  const rand = mulberry32(hashSeed(village.id + ":drain"));
-  const lines: { order: number; path: { lat: number; lng: number }[] }[] = [];
-  for (let i = 0; i < 7; i++) {
-    const a = rand() * Math.PI * 2;
-    const path = [] as { lat: number; lng: number }[];
-    let d = 1500;
-    let ang = a;
-    while (d > 60) {
-      path.push(offset(village.center, Math.cos(ang) * d, Math.sin(ang) * d));
-      ang += (rand() - 0.5) * 0.5;
-      d -= 130 + rand() * 130;
-    }
-    path.push(village.center);
-    lines.push({ order: 1 + Math.floor(rand() * 3), path });
-  }
-  return lines;
+  return villageTerrain(village).drainage;
 }
