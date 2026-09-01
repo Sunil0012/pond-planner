@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Map as LMap, LayerGroup } from "leaflet";
-import { contourRings, drainageLines, type Evaluation } from "@/lib/pond/engine";
+import { contourRings, type Evaluation } from "@/lib/pond/engine";
+import { fetchWaterways, WATERWAY_STYLE, type WaterwayLine } from "@/lib/pond/osmWater";
 import type { Study } from "@/lib/pond/types";
 
 export type LayerKey =
@@ -12,7 +13,7 @@ export type LayerKey =
   | "catchments"
   | "candidates";
 
-export type BaseKey = "satellite" | "terrain" | "street";
+export type BaseKey = "satellite" | "terrain" | "street" | "cyclosm" | "humanitarian";
 
 const BASES: Record<BaseKey, { url: string; attribution: string }> = {
   satellite: {
@@ -27,6 +28,14 @@ const BASES: Record<BaseKey, { url: string; attribution: string }> = {
     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     attribution: "&copy; OpenStreetMap contributors",
   },
+  cyclosm: {
+    url: "https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
+    attribution: "&copy; CyclOSM, OpenStreetMap contributors",
+  },
+  humanitarian: {
+    url: "https://tile-{s}.openstreetmap.fr/hot/{z}/{x}/{y}.png",
+    attribution: "&copy; Humanitarian OSM Team, OpenStreetMap contributors",
+  },
 };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -34,6 +43,7 @@ const STATUS_COLOR: Record<string, string> = {
   CONDITIONAL: "#c98a1e",
   REJECTED: "#b3453b",
 };
+
 
 export function PondMap({
   study,
@@ -63,6 +73,24 @@ export function PondMap({
   const L = useRef<typeof import("leaflet") | null>(null);
   const pickRef = useRef(onPickPoint);
   pickRef.current = onPickPoint;
+  const [waterways, setWaterways] = useState<WaterwayLine[] | null>(null);
+  const [waterState, setWaterState] = useState<"loading" | "ready" | "error">("loading");
+  const [zoom, setZoom] = useState(14);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    setWaterState("loading");
+    setWaterways(null);
+    fetchWaterways(study.village, ac.signal)
+      .then((w) => {
+        setWaterways(w);
+        setWaterState("ready");
+      })
+      .catch(() => setWaterState("error"));
+    return () => ac.abort();
+  }, [study.village]);
+
+
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +112,8 @@ export function PondMap({
       m.on("click", (e: import("leaflet").LeafletMouseEvent) => {
         pickRef.current?.(e.latlng.lat, e.latlng.lng);
       });
+      m.on("zoomend", () => setZoom(m.getZoom()));
+      setZoom(m.getZoom());
       setTimeout(() => m.invalidateSize(), 120);
     })();
     return () => {
@@ -99,7 +129,10 @@ export function PondMap({
     const leaflet = L.current;
     if (!leaflet || !map.current || !baseLayer.current) return;
     baseLayer.current.setUrl(BASES[base].url);
+    baseLayer.current.options.attribution = BASES[base].attribution;
+    map.current.attributionControl.addAttribution(BASES[base].attribution);
   }, [base]);
+
 
   useEffect(() => {
     const leaflet = L.current;
@@ -140,14 +173,55 @@ export function PondMap({
       );
     }
 
-    if (layers.drainage && g.drainage) {
-      drainageLines(study.village).forEach((d) =>
+    if (layers.drainage && g.drainage && waterways) {
+      const chevronSpacingPx = 46;
+      waterways.forEach((d) => {
+        const style = WATERWAY_STYLE[d.kind] ?? { color: "#2f86c9", weight: 2, label: d.kind };
+        const label = `${d.name ? `${d.name} — ` : ""}${style.label}${d.intermittent ? " (seasonal)" : ""} · flow follows the arrows`;
         leaflet
-          .polyline(d.path.map(toLL), { color: "#2563a8", weight: d.order, opacity: 0.85 })
-          .bindTooltip(`Drainage line — Strahler order ${d.order}`)
-          .addTo(g.drainage!),
-      );
+          .polyline(d.path.map(toLL), {
+            color: style.color,
+            weight: style.weight,
+            opacity: 0.9,
+            dashArray: d.intermittent ? "8 6" : undefined,
+            lineCap: "round",
+          })
+          .bindTooltip(label)
+          .addTo(g.drainage!);
+
+        // Directional chevrons: OSM waterways are digitised downstream, so the
+        // node order is the direction the water actually travels.
+        const pts = d.path.map((p) => m.latLngToLayerPoint([p.lat, p.lng]));
+        let carry = chevronSpacingPx / 2;
+        for (let i = 0; i < pts.length - 1; i++) {
+          const a = pts[i]!;
+          const b = pts[i + 1]!;
+          const seg = a.distanceTo(b);
+          if (seg < 1) continue;
+          const angle = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+          let t = carry;
+          while (t <= seg) {
+            const pt = leaflet.point(a.x + ((b.x - a.x) * t) / seg, a.y + ((b.y - a.y) * t) / seg);
+            const ll = m.layerPointToLatLng(pt);
+            leaflet
+              .marker(ll, {
+                interactive: false,
+                keyboard: false,
+                icon: leaflet.divIcon({
+                  className: "flow-chevron",
+                  iconSize: [14, 14],
+                  iconAnchor: [7, 7],
+                  html: `<span style="display:block;transform:rotate(${angle}deg);color:${style.color};font-size:13px;line-height:14px;text-align:center;text-shadow:0 0 2px rgba(255,255,255,.9)">&#10148;</span>`,
+                }),
+              })
+              .addTo(g.drainage!);
+            t += chevronSpacingPx;
+          }
+          carry = t - seg;
+        }
+      });
     }
+
 
     evaluations.forEach((e) => {
       const c = e.candidate;
