@@ -1,4 +1,6 @@
-import { blob, hashSeed, mulberry32, offset, polygonAreaM2 } from "./geo";
+import { blob, hashSeed, mulberry32, polygonAreaM2 } from "./geo";
+import { candidateOutlets, cellLatLng, junctionOrder, outletGeometry, villageTerrain } from "./terrainSim";
+
 import type {
   Candidate,
   Confidence,
