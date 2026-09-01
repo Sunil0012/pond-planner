@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Map as LMap, LayerGroup } from "leaflet";
-import { contourRings, drainageLines, type Evaluation } from "@/lib/pond/engine";
+import { contourRings, type Evaluation } from "@/lib/pond/engine";
+import { fetchWaterways, WATERWAY_STYLE, type WaterwayLine } from "@/lib/pond/osmWater";
 import type { Study } from "@/lib/pond/types";
 
 export type LayerKey =
@@ -12,7 +13,7 @@ export type LayerKey =
   | "catchments"
   | "candidates";
 
-export type BaseKey = "satellite" | "terrain" | "street";
+export type BaseKey = "satellite" | "terrain" | "street" | "cyclosm" | "humanitarian";
 
 const BASES: Record<BaseKey, { url: string; attribution: string }> = {
   satellite: {
@@ -27,6 +28,14 @@ const BASES: Record<BaseKey, { url: string; attribution: string }> = {
     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     attribution: "&copy; OpenStreetMap contributors",
   },
+  cyclosm: {
+    url: "https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
+    attribution: "&copy; CyclOSM, OpenStreetMap contributors",
+  },
+  humanitarian: {
+    url: "https://tile-{s}.openstreetmap.fr/hot/{z}/{x}/{y}.png",
+    attribution: "&copy; Humanitarian OSM Team, OpenStreetMap contributors",
+  },
 };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -34,6 +43,7 @@ const STATUS_COLOR: Record<string, string> = {
   CONDITIONAL: "#c98a1e",
   REJECTED: "#b3453b",
 };
+
 
 export function PondMap({
   study,
