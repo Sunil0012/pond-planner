@@ -112,6 +112,8 @@ export function PondMap({
       m.on("click", (e: import("leaflet").LeafletMouseEvent) => {
         pickRef.current?.(e.latlng.lat, e.latlng.lng);
       });
+      m.on("zoomend", () => setZoom(m.getZoom()));
+      setZoom(m.getZoom());
       setTimeout(() => m.invalidateSize(), 120);
     })();
     return () => {
@@ -127,7 +129,10 @@ export function PondMap({
     const leaflet = L.current;
     if (!leaflet || !map.current || !baseLayer.current) return;
     baseLayer.current.setUrl(BASES[base].url);
+    baseLayer.current.options.attribution = BASES[base].attribution;
+    map.current.attributionControl.addAttribution(BASES[base].attribution);
   }, [base]);
+
 
   useEffect(() => {
     const leaflet = L.current;
