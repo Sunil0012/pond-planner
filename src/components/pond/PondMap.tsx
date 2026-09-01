@@ -73,6 +73,24 @@ export function PondMap({
   const L = useRef<typeof import("leaflet") | null>(null);
   const pickRef = useRef(onPickPoint);
   pickRef.current = onPickPoint;
+  const [waterways, setWaterways] = useState<WaterwayLine[] | null>(null);
+  const [waterState, setWaterState] = useState<"loading" | "ready" | "error">("loading");
+  const [zoom, setZoom] = useState(14);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    setWaterState("loading");
+    setWaterways(null);
+    fetchWaterways(study.village, ac.signal)
+      .then((w) => {
+        setWaterways(w);
+        setWaterState("ready");
+      })
+      .catch(() => setWaterState("error"));
+    return () => ac.abort();
+  }, [study.village]);
+
+
 
   useEffect(() => {
     let cancelled = false;
